@@ -31,21 +31,36 @@ def analyze_experiment_data():
     さらに、気圧ごとにデータを集約したCSVと、全体のグラフを出力する。
     """
     # --- ★★★ 設定項目 ★★★ ---
+    # 解析したいデータが入っているフォルダ名を指定します。
+    # 例: 'data_set_1'
+    # 空文字 ('') にすると、このスクリプトと同じ場所にあるファイルを探します。
+    TARGET_FOLDER = '20250723_1'  # ← ここを編集してください
+
     # 解析したい特定の気圧を指定します (例: 200)。
     # すべての気圧を解析する場合は None を設定します。
-    TARGET_PRESSURE = 200  # ← ここを編集してください
+    TARGET_PRESSURE = 300  # ← ここを編集してください
     # --- ★★★★★★★★★★★ ---
 
     # --- 1. 対象となるCSVファイルをすべて見つける ---
-    file_pattern = '*_hoden.csv'
+    if TARGET_FOLDER:
+        # ターゲットフォルダが指定されている場合
+        if not os.path.isdir(TARGET_FOLDER):
+            print(f"❌ エラー: フォルダ '{TARGET_FOLDER}' が見つかりません。")
+            return
+        file_pattern = os.path.join(TARGET_FOLDER, '*_hoden.csv')
+        search_location_msg = f"フォルダ '{TARGET_FOLDER}'"
+    else:
+        # ターゲットフォルダが指定されていない場合（従来通り）
+        file_pattern = '*_hoden.csv'
+        search_location_msg = "現在のフォルダ"
+
     csv_files = glob.glob(file_pattern)
 
     if not csv_files:
-        print(f"❌ エラー: '{file_pattern}' に一致するファイルが見つかりません。")
-        print("スクリプトと同じフォルダにデータファイルがあるか確認してください。")
+        print(f"❌ エラー: {search_location_msg} 内で '{os.path.basename(file_pattern)}' に一致するファイルが見つかりません。")
         return
 
-    print(f"✅ {len(csv_files)}個のデータファイルが見つかりました。")
+    print(f"✅ {search_location_msg} で {len(csv_files)}個のデータファイルが見つかりました。")
     if TARGET_PRESSURE is not None:
         print(f"🎯 ターゲット気圧: {TARGET_PRESSURE} Pa のデータのみを解析します。")
     print("-" * 40)
@@ -80,9 +95,7 @@ def analyze_experiment_data():
             COL_V_CH1 = 1
             COL_V_CH2 = 5
 
-            # --- ★★★ 新しい修正箇所 ★★★ ---
             # 1列目がタイムスタンプ形式 (HH:MM:SS) の行のみを保持する
-            # これにより、ファイルの末尾にあるフッター情報を除外します
             time_format_regex = r'^\d{2}:\d{2}:\d{2}$'
             original_rows = len(df)
             df = df[df[0].str.match(time_format_regex, na=False)].copy()
@@ -94,8 +107,6 @@ def analyze_experiment_data():
 
             # 電圧値が無効(NaN)になった行をデータから削除します。
             df.dropna(subset=[COL_V_CH1, COL_V_CH2], inplace=True)
-            # --- ★★★★★★★★★★★★★★★ ---
-
 
             # --- 3. 電流を計算 ---
             current_ch2 = df[COL_V_CH2] / resistance_ch2
@@ -135,9 +146,11 @@ def analyze_experiment_data():
 
     for pressure_val, group_df in grouped_by_pressure:
         summary_filename = f'summary_iv_{pressure_val}Pa.csv'
+        # 保存先パスを決定
+        summary_filepath = os.path.join(TARGET_FOLDER, summary_filename)
         summary_df = group_df[['voltage_ch1_V', 'final_current_A']]
-        summary_df.to_csv(summary_filename, index=False)
-        print(f"  -> ✅ 気圧別サマリーファイルを保存しました: {summary_filename}")
+        summary_df.to_csv(summary_filepath, index=False)
+        print(f"  -> ✅ 気圧別サマリーファイルを保存しました: {summary_filepath}")
     
     # --- 7. 全体の電流-電圧特性グラフのプロット ---
     print("\n📊 全データを統合してグラフを作成します...")
@@ -151,6 +164,9 @@ def analyze_experiment_data():
     else:
         plot_title = '電流-電圧特性グラフ (全データ)'
         plot_filename = 'current_voltage_characteristics_plot_final.png'
+
+    # 保存先パスを決定
+    plot_filepath = os.path.join(TARGET_FOLDER, plot_filename)
 
     unique_resistances = sorted(final_df['resistance_ohm'].unique())
     for res in unique_resistances:
@@ -170,8 +186,8 @@ def analyze_experiment_data():
     ax.minorticks_on()
     ax.grid(which='both', linestyle=':', linewidth='0.5')
     
-    plt.savefig(plot_filename, dpi=300)
-    print(f"✅ グラフを '{plot_filename}' として保存しました。")
+    plt.savefig(plot_filepath, dpi=300)
+    print(f"✅ グラフを '{plot_filepath}' として保存しました。")
 
 if __name__ == '__main__':
     analyze_experiment_data()
